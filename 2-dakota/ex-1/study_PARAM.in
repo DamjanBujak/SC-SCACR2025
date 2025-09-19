@@ -1,0 +1,57 @@
+environment
+	tabular_data
+		tabular_data_file "tabular.txt"
+	output_file "dakota.out"
+	error_file "dakota.err"
+	write_restart "dakota.rst"
+	results_output
+		text
+
+method
+	id_method "parameter_study"
+	multidim_parameter_study
+	    partitions = 5 4
+	model_pointer = 'model1'	
+
+model
+	id_model "model1"
+	single
+		interface_pointer "interface1"
+	variables_pointer "variables1"
+	responses_pointer "responses1"
+
+variables
+	
+	id_variables "variables1"
+	active design
+
+    continuous_design 2
+		lower_bounds  0	    0.5
+		upper_bounds  4     0.6
+		descriptors  "rc" "gamma_f"
+
+	continuous_state 2
+		initial_state   2         1
+		descriptors   "hm0"  "gamma_beta"  
+
+interface
+	id_interface "interface1"
+	analysis_drivers "python eurotop-driver.py"
+		fork
+			parameters_file "params.in"
+			results_file "results.out"
+			work_directory
+				named "workdir/run"
+				copy_files 'eurotop-driver.py' 'eurotop-template.py'
+				directory_tag
+				directory_save
+	asynchronous
+		evaluation_concurrency 8
+
+responses
+	id_responses "responses1"
+	response_functions 1
+		scalar_responses 1
+		descriptors "overtop"
+	no_gradients
+	no_hessians

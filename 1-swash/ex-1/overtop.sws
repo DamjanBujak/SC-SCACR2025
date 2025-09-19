@@ -1,0 +1,394 @@
+$ ======================================================================
+$ PROJECT / TITLE
+$ ======================================================================
+$ Two identifiers (project name and run description). Purely administrative.
+
+!   PROJECT  'name'  'nr'
+!            'title1'
+!            'title2'
+!            'title3'
+
+PROJ 'exercise1' 'run1'
+
+$ ======================================================================
+$ MODEL DIMENSIONALITY & UNITS
+$ ======================================================================
+$ ONEDIMENSIONAL = 1D/2DV cross-section.
+$ TWODIMENSIONAL = 2DH/3D
+
+!   MODE  DYNamic  / -> TWODimensional \  (SKIPMOMentum)
+!                  \    ONEDimensional /
+
+MODE DYN ONEDIMENSIONAL
+
+
+$ Use nautical wave-direction convention (directions are “coming from”,
+$ clockwise positive from North). 
+SET NAUTICAL
+
+!   SET [level] [nor] [depmin] [maxmes] [maxerr] [seed]                        &
+!       [grav] [rhowat] [temp] [salinity] [dynvis] [rhoair] [rhosed]           &
+!       [cdcap] [prmean] [backvisc] [kappa]                                    &
+!       CORIolis  CARTesian|NAUTical  [epshu]  CC                              &
+!       [printf]  [prtest]  [outlev]
+
+$ ======================================================================
+$ STILL WATER LEVEL / REFERENCE LEVEL
+$ ======================================================================
+$ Mean water level above datum [m]. Make sure this matches your bathy datum.
+$ Here: 0.8 m (e.g., elevated sea level due to tide or storm surge).
+SET level=0.8
+
+$ ======================================================================
+$ BATHYMETRY & GRID
+$ ======================================================================
+$ Minimum active depth [m] to remove from computation.
+SET depmin=0.01
+
+$ Background viscosity [m^2/s] for unresolved vertical mixing. 
+$ The value must be small compared to the vertical viscosity calculated by the standard k − ε model.
+$ Small value to aid stability. Value of 10−4 to 10−3 m2/s.
+SET backvisc=0.0001
+
+$ BOTCEL MEAN: bottom elevation per computational cell is averaged from input grid corners.
+BOTCEL MEAN
+
+$ ----------------------------------------------------------------------
+$ COMPUTATIONAL GRID
+$ ----------------------------------------------------------------------
+$ CGRID REGULAR
+
+!          | REGular [xpc] [ypc] [alpc] [xlenc] [ylenc] [mxc] [myc]  |
+!   CGRID <  CURVilinear [mxc] [myc]  (EXC [xexc] [yexc])             >        &
+!          | UNSTRUCtured  
+
+CGRID REGULAR xpc=0 ypc=0 alpc=0 xlenc=250 ylenc=0 mxc=500 myc=0
+
+$ Number of vertical layers (sigma layers). 3 is common for nearshore
+$ applications; increase for vertical resolution (at higher cost).
+
+!   VERTical [kmax] < [thickness] M|PERC >
+
+VERTICAL kmax=3
+
+$ ----------------------------------------------------------------------
+$ BATHYMETRY INPUT
+$ ----------------------------------------------------------------------
+$ Define a rectangular region in index space to fill with bottom data:
+$ INP BOT REG [xpinp] [ypinp] [alpinp]  [mxinp] [myinp] [dxinp] [dyinp]
+$ Here: from i=0..249 (250 columns), single j.
+
+!   INPgrid  BOT|WLEV|CUR|VX|VY|FRic|WInd|WX|WY|PRessure|POROS|PSIZ|HSTRUC|    &
+!            NPLAnts|DRAFt|LABel|SALinity|TEMPerature|SEDiment                 &
+!
+!      | REG [xpinp] [ypinp] [alpinp]  [mxinp] [myinp]  [dxinp] [dyinp] |
+!      |                                                                |
+!     <  CURVilinear STAGgered                                           >     &
+!      |                                                                |
+!      | UNSTRUCtured                                                   |
+!
+!      (EXCeption  [excval])                                                   &
+!
+!      (NONSTATionary [tbeginp] [deltinp] SEC|MIN|HR|DAY [tendinp])            &
+!
+!      (NONUNIForm  [kmax])
+
+INP BOT REG xpinp=0 ypinp=0 alpinp=0 mxinp=249 myinp=0 dxinp=1 dyinp=0
+
+$ Read bottom (bathymetry) from external file. Unit “-1” = to inverse up-down. 
+$ Wet depths should be positive and dry topography should be negative.
+$ Ensure the file ‘bat.bot’ aligns with grid extents and orientation.
+
+!   READinp   BOTtom|WLEVel|CURrent|FRic|WInd|PRessure|COOR|POROS|PSIZ|HSTRUC| &
+!             NPLAnts|DRAFt|LABel|SALinity|TEMPerature|SEDiment                &
+!
+!                | 'fname1'        |
+!        [fac]  <  SERIes 'fname2'  >  [idla] [nhedf] ([nhedt]) ([nhedvec])     &
+!                | LAYers 'fname3' |
+!
+!        FREE | FORMAT 'form' | [idfm] | UNFORMATTED
+
+READ BOT fac=-1 'bat.bot'
+
+$ Initialize free surface and velocities. “ZERO” → Both the initial 
+$ water level and velocity components are set to zero.
+$ For energetic seas you may prefer a spin-up; zero is fine with a ramp.
+
+!             | -> CONstant [wlev] [vx] [vy] [tke] [epsilon]
+!             |
+!   INITial  <     ZERO
+!             |
+!             |    STEAdy
+
+INIT ZERO
+
+$ ======================================================================
+$ BOUNDARY CONDITIONS (WAVE FORCING)
+$ ======================================================================
+$ Spectral shape specification for boundary waves.
+$ JONswap 3.3 → peakedness γ≈3.3 (typical wind sea). 
+
+!                    |    PM              |
+!   BOUnd SHAPespec <  -> JONswap [gamma]  > SIG|RMS  PEAK|MEAN  DSPR POW|DEGR
+!                    |    TMA             |
+!
+
+BOUNd SHAPespec JONswap 3.3 SIG PEAK DSPR POWER
+
+$ WEST boundary (SIDE W):
+$  - BTYPE WEAK: weakly reflective (partially absorbing) boundary.
+$  - SMOO 30 SEC: smoothing/ramping of boundary signal over 30 s.
+$  - CON SPECTRUM: constant (stationary) spectrum during the run segment.
+$  - h=2.1: significant wave height Hm0 [m].
+$  - per=5.5: peak period Tp [s].
+$  - cycle=20 MIN: repeat period of the boundary realization (20 minutes).
+$    Use a cycle ≥ simulation duration, or ensure compute time aligns.
+
+!              / -> SIDE  N|NW|W|SW|S|SE|E|NE | [k]  CCW|CLOCKWise  \
+!   BOUndcond <                                                      >         &
+!              \    SEGment  / -> XY  < [x]  [y] >            \     /
+!                            \    IJ  < [i]  [j] > | < [k] >  /
+!
+!        BTYPe WLEV|VEL|DISCH|RIEMann|LRIEmann|WEAKrefl|SOMMerfeld|OUTFlow     &
+!
+!        LAYer [k] | HYPerbolic | LOGarithmic                                  &
+!
+!        SMOOthing [period] SEC|MIN|HR|DAY                                     &
+!
+!        ADDBoundwave                                                          &
+!
+!                   | FOURier  [azero] < [ampl] [omega] [phase] >
+!                   | REGular  [h] [per] [dir]
+!       | UNIForm  <  SPECTrum [h] [per] [dir] [dd] [cycle] SEC|MIN|HR|DAY
+!       |           | SERIes   'fname' [itmopt]
+!       |           | SPECFile 'fname' [cycle] SEC|MIN|HR|DAY
+!      <                                                                       &
+!       |           | FOURier  < [len] [azero] < [ampl] [omega] [phase] > >
+!       |           | REGular  < [len] [h] [per] [dir] >
+!       |           | SPECTrum < [len] [h] [per] [dir] [dd] [cycle] S|MI|HR|DA >
+!       | VARiable <  SERIes   < [len] 'fname' [itmopt] >
+!                   | SPECFile < [len] 'fname' [cycle] SEC|MIN|HR|DAY >
+!                   | SPECSwan 'fname' [cycle] SEC|MIN|HR|DAY
+
+BOU SIDE W BTYPE WEAK SMOO period=30 SEC ADDBoundwave UNIF SPECTRUM h=2 per=6 cycle=20 MIN
+
+$ EAST boundary (SIDE E):
+$  - BTYPE SOMM: Sommerfeld radiation (outgoing waves can exit with minimal
+$    reflection). Good for a “downstream/open” boundary in 1D runs.
+
+BOU SIDE E BTYPE SOMM
+
+$ ======================================================================
+$ PHYSICS & NUMERICS
+$ ======================================================================
+$ Enable breaking dissipation. Default formulation is robust for surf zone.
+$ Note that by taking a sufficient number of vertical layers (10 or so) 
+$ the phase velocity at the breaking front will be computed accurately enough 
+$ and hence, this option should not be activated.
+
+!   BREaking  [alpha] [beta] [nufac]
+
+BREAKING
+
+$ Turbulent eddy viscosity
+$ Explicit viscosity (in addition to backvisc). Leave plain “VISC” to use defaults.
+
+!                               | -> CONstant [visc]
+!                               |
+!              | -> Horizontal <     SMAGorinsky [cs]
+!              |                |
+!              |                |    MIXing [lm]
+!              |
+!              |
+!   VISCosity <     Vertical  KEPS [cfk] [cfe]
+!              |
+!              |
+!              |                | -> LINear
+!              |    FULL  KEPS <
+!              |                |    NONLinear
+
+
+$ Bottom friction using Manning coefficient n = 0.06 s/m^(1/3).
+$ Typical rubble mound values: n ≈ 0.04–0.06; 0.06 is relatively rough (dissipative).
+
+!              |    LINear [k]
+!              |
+!              |    CONstant [cf]
+!              |
+!              |    CHEZy [cf]
+!              |
+!   FRICtion  <  -> MANNing [cf]
+!              |
+!              |    COLEbrook [h]
+!              |
+!              |            | -> SMOOTH
+!              |    LOGlaw <
+!                           |    ROUGHness [h]
+
+FRIC MANNING 0.05
+
+$ INP FRIC REG xpinp=0 ypinp=0 alpinp=0 mxinp=249 myinp=0 dxinp=1 dyinp=0
+$ READ BOT fac=1 'fric.bot'
+
+
+$ NONHYD: non-hydrostatic pressure solver (needed for short waves, flows overt steep bottom, etc.).
+$ BOX: Keller-box scheme for vertical pressure. STANDARD: classical central differencing
+$ PREC ILU: ILU preconditioner to accelerate linear solves.
+$ The former approximation is particularly meant for applications where vertical 
+$ structures are important, e.g. stratified flows with density currents, undertow 
+$ and flows over steep and rapidly varying bottoms, while the latter will be mainly 
+$ used for accurate short wave propagation with two or three layers employed. 
+$ In addition, when applying the Keller-box scheme, it is advised to choose an 
+$ equidistant layer distribution (variable thicknesses only) in order to get the 
+$ optimal linear frequency dispersion accuracy (i.e. the relative error of the 
+$ phase speed predicted by the model compared to that from the linear dispersion 
+$ theory is minimal).
+$ The ILU preconditioner is more robust. For instance, when high waves 
+$ or very short waves are involved, or when the bottom topography exhibits steep 
+$ slopes, or when a considerable number of layers (> 20) is involved, it may be 
+$ wise to choose the ILU preconditioner.
+
+!                    |    STAndard      |
+!                    |                  |
+!   NONHYDrostatic  <  -> BOX            > [theta]                             &
+!                    |                  |
+!                    
+!                   SUBGrid [pmax]  REDuced [qlay]                             &
+!
+!                   SOLVer [rhsaccur] [initaccur] [maxiter] [relax] [precfq]   &
+!
+!                   PREConditioner  ILUDS|ILUD|ILU|NONE                        &
+!
+!                   PROJection  ITERative [tol] [maxiter]
+
+
+NONHYD BOX PREC ILU
+
+$ ----------------------------------------------------------------------
+$ ADVECTION/DISCRETIZATION SCHEMES
+$ ----------------------------------------------------------------------
+$ The following lines set upwind (UPW) or MUSCL reconstructions for
+$ momentum (UMOM, WMOM) and variables (H,V). Choices balance accuracy/stability.
+
+
+!                   |         | UMOM  MOMentum|HEAD  / -> Horizontal   |
+!                   |         |                      \    Vertical     |
+!                   | UPWind <                                         |
+!                   |         | WMOM  / -> Horizontal                  |
+!                   |         |       \    Vertical                    |
+!                   |                                                  |
+!   DISCRETization <  CORRdep                                           >      &
+!                   |                                                  |
+!                   | TRANSPort  / -> Horizontal                       |
+!                   |            \    Vertical                         |
+!                   |                                                  |
+!
+!
+!                      | NONe                                 |
+!                      |                                      |
+!                      | FIRstorder                           |
+!                      |                                      |
+!                      | HIGherorder [kappa]                  |
+!                      |                                      |
+!                      |          | -> SWEBy [phi]            |
+!                      |          |                           |
+!                      | LIMiter <  RKAPpa [kappa]            |
+!                      |          |                           |
+!                      |          | PLKAPpa [kappa] [mbound]  |
+!                      | FROmm                                |
+!                      |                                      |
+!                      | -> BDF | LUDs                        |
+!                      |                                      |
+!                     <  QUIck                                 >
+!                      |                                      |
+!                      | CUI                                  |
+!                      |                                      |
+!                      | MINMod                               |
+!                      |                                      |
+!                      | SUPerbee                             |
+!                      |                                      |
+!                      | VANLeer                              |
+!                      |                                      |
+!                      | MUScl                                |
+!                      |                                      |
+!                      | KORen                                |
+!                      |                                      |
+!                      | SMArt                                |
+
+$ First: horizontal momentum with BDF (backward differentiation) time scheme.
+DISCRET UPW UMOM MOM H BDF
+$ Horizontal momentum with MUSCL limiter for water height H.
+DISCRET UPW WMOM H MUSCL
+$ Vertical momentum with MUSCL limiter for velocity V (horizontal component).
+DISCRET UPW UMOM MOM V MUSCL
+$ Vertical momentum with MUSCL limiter for velocity V (vertical component).
+DISCRET UPW WMOM V MUSCL
+
+$ ----------------------------------------------------------------------
+$ TIME INTEGRATION CONTROLS
+$ ----------------------------------------------------------------------
+$ Here: allow CFL to vary between 0.1 and 0.3.
+
+!               | EXPL [cfllow] [cflhig]                        |
+!               |                                               |
+!   TIMEI METH <  IMPL [thetac] [thetas] &                       >             &
+!               |                                               |
+!               |      SOLVer [tol] [maxiter] [weight]  NEWTon  |
+!
+!         VERTical [thetau] [thetaw] [thetat]
+
+
+TIMEI METH EXPL cfllow=0.1 cflhig=0.3
+
+$ ======================================================================
+$ OUTPUT DEFINITIONS
+$ ======================================================================
+
+!   POINTS  'sname'  < [xp]  [yp]  >     |    FILE 'fname'
+
+POINTS 'overtop' 190 0
+
+$ TABLE <label> HEAD <file> <vars...> OUTPUT <t_start> <dt> <units>
+$  - TSEC: simulation time [s]
+$  - DISCH: discharge per unit width [m^2/s] (l/s/m if post-processed)
+$  - DEP: total water depth [m]
+$  - BOTL: bottom level [m]
+$  - VEL: velocity magnitude [m/s]
+$ Output every 0.2 s from t=5 min (after initial transients).
+
+!   TABLE   'sname'  HEAD | NOHEAD | SWASH  'fname'                            &
+!           < TIME|TSEC|XP|YP|DIST|DEP|BOTL|WATL|DRAF|VMAG|VDIR|VEL|VKSI|VETA| &
+!             PRESS|NHPRES|QMAG|QDIR|DISCH|QKSI|QETA|VORT|WMAG|WDIR|WIND|FRC|  &
+!             USTAR|UFRIC|HRUN|BRKP|ZK|HK|VMAGK|VDIRK|VELK|VKSIK|VETAK|VZ|     &
+!             VOMEGA|QMAGK|QDIRK|DISCHK|QKSIK|QETAK|PRESSK|NHPRSK|TKE|EPS|     &
+!             VISC|HS|HRMS|SETUP|MVMAG|MVDIR|MVEL|MVKSI|MVETA|MVMAGK|MVDIRK|   &
+!             MVELK|MVKSIK|MVETAK|MTKE|MEPS|MVISC|SAL|TEMP|SED|MSAL|MTEMP|     &
+!             MSED|SALK|TEMPK|SEDK|MSALK|MTEMPK|MSEDK|FORCEX|FORCEY|FORCEZ|    &
+!             MOMX|MOMY|MOMZ|TRAX|TRAY|TRAZ|ROTX|ROTY|ROTZ|PTOP|RUNUP >        &
+!           (OUTPUT [tbegtbl] [delttbl] SEC|MIN|HR|DAY)
+
+TABLE 'overtop' HEAD 'overtop.txt' TSEC XP YP DISCH DEP BOTL VEL OUTPUT 000500.000 0.2 SEC
+
+$ Wave probe upstream (e.g., to verify Hm0/Tp at boundary or near toe).
+POINTS 'wave' 50 0 220 0
+
+$ Output free surface/water level (WATL), depth, bottom level at 0.2 s interval,
+$ starting immediately (t=0).
+TABLE 'wave' HEAD 'wave.txt' TSEC XP YP DEPTH BOTL WATL OUTPUT 000000.000 0.2 SEC
+
+$ ======================================================================
+$ RUN CONTROL
+$ ======================================================================
+$ COMPUTE <t_start> <dt_fixed_or_min> <units> <t_end>
+$ Here: start at 0, nominal time-step parameter 0.001 s (acts as fixed or
+$ lower bound depending on TIMEI), simulate to 2500 s.
+$ Ensure t_end − t_start comfortably exceeds any boundary “cycle”.
+
+!                              | -> Sec  |
+!   COMPute   [tbegc] [deltc] <     MIn   > [tendc]
+!                              |    HR   |
+!                              |    DAy  |
+
+COMPUTE 000000.000 0.001 SEC 002500.000
+
+STOP

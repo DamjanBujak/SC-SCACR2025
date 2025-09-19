@@ -1,0 +1,59 @@
+environment
+	tabular_data
+		tabular_data_file "tabular.txt"
+	output_file "dakota.out"
+	error_file "dakota.err"
+	write_restart "dakota.rst"
+	results_output
+		text
+
+method
+	id_method "UQ_study"
+	sampling
+	    sample_type lhs
+		samples = 50
+		probability_levels =  0.5 0.95	
+	model_pointer = 'model1'
+
+model
+	id_model "model1"
+	single
+		interface_pointer "interface1"
+	variables_pointer "variables1"
+	responses_pointer "responses1"
+
+variables
+	
+	id_variables "variables1"
+	active uncertain
+
+    continuous_state 2
+		initial_state    3	    1
+		descriptors    "rc"  "gamma_beta" 
+
+	normal_uncertain = 2
+		means                 2      0.55
+        std_deviations       0.2     0.02
+		descriptors         "hm0"   "gamma_f"
+
+interface
+	id_interface "interface1"
+	analysis_drivers "python eurotop-driver.py"
+		fork
+			parameters_file "params.in"
+			results_file "results.out"
+			work_directory
+				named "workdir/run"
+				copy_files 'eurotop-driver.py' 'eurotop-template.py'
+				directory_tag
+				directory_save
+	asynchronous
+		evaluation_concurrency 8
+
+responses
+	id_responses "responses1"
+	response_functions 1
+		scalar_responses 1
+		descriptors "overtop"
+	no_gradients
+	no_hessians

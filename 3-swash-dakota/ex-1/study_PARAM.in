@@ -1,0 +1,57 @@
+environment
+	tabular_data
+		tabular_data_file "tabular.txt"
+	output_file "dakota.out"
+	error_file "dakota.err"
+	write_restart "dakota.rst"
+	results_output
+		text
+
+method
+	id_method "parameter_study"
+	multidim_parameter_study
+	    partitions = 3
+	model_pointer = 'model1'	
+
+model
+	id_model "model1"
+	single
+		interface_pointer "interface1"
+	variables_pointer "variables1"
+	responses_pointer "responses1"
+
+variables
+	
+	id_variables "variables1"
+	active design
+
+    continuous_design 1
+		lower_bounds  2	      
+		upper_bounds  2.4     
+		descriptors  "hm0" 
+
+	continuous_state 2
+		initial_state   3         1
+		descriptors    "rc"  "gamma_beta"  
+
+interface
+	id_interface "interface1"
+	analysis_drivers "python swash-driver.py"
+		fork
+			parameters_file "params.in"
+			results_file "results.out"
+			work_directory
+				named "workdir/run"
+				copy_files 'copy/swash-driver.py' 'copy/postproc.py'  'copy/template.sws'  'copy/bat.bot' 
+				directory_tag
+				directory_save
+	asynchronous
+		evaluation_concurrency 8
+
+responses
+	id_responses "responses1"
+	response_functions 1
+		scalar_responses 1
+		descriptors "overtop"
+	no_gradients
+	no_hessians
