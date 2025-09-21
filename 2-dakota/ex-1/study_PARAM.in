@@ -1,57 +1,110 @@
+# Dakota input file for parameter study of EurOtop model
+# This file defines a multidimensional parameter study to analyze overtopping rates
+
+# ENVIRONMENT SECTION - Controls Dakota's runtime behavior and output settings
 environment
+	# Enable tabular data output for organized results
 	tabular_data
+		# Output file containing parameter values and response data in tabular format
 		tabular_data_file "tabular.txt"
+	# Main Dakota output file for general information and progress
 	output_file "dakota.out"
+	# Error file for capturing any error messages or warnings
 	error_file "dakota.err"
+	# Restart file to save Dakota state for potential continuation runs
 	write_restart "dakota.rst"
+	# Specify output format for results
 	results_output
+		# Use plain text format for results output
 		text
 
+# METHOD SECTION - Defines the optimization/analysis algorithm to use
 method
+	# Unique identifier for this method
 	id_method "parameter_study"
+	# Use multidimensional parameter study (grid-based sampling)
 	multidim_parameter_study
+	    # Number of intervals for each design variable (5 for rc, 4 for gamma_f)
+	    # This creates a 6x5 grid (including endpoints) = 30 function evaluations
 	    partitions = 5 4
+	# Reference to the model that this method will use
 	model_pointer = 'model1'	
 
+# MODEL SECTION - Defines the relationship between variables, interface, and responses
 model
+	# Unique identifier for this model
 	id_model "model1"
+	# Single model (not hierarchical or surrogate)
 	single
+		# Reference to the interface for running simulations
 		interface_pointer "interface1"
+	# Reference to the variables specification
 	variables_pointer "variables1"
+	# Reference to the responses specification
 	responses_pointer "responses1"
 
+# VARIABLES SECTION - Defines input parameters and their characteristics
 variables
 	
+	# Unique identifier for this variables specification
 	id_variables "variables1"
+	# Set design variables as active (will be varied in the study)
 	active design
 
+    # Design variables that will be varied in the parameter study
     continuous_design 2
+		# Lower bounds for design variables: rc >= 0, gamma_f >= 0.5
 		lower_bounds  0	    0.5
+		# Upper bounds for design variables: rc <= 4, gamma_f <= 0.6
 		upper_bounds  4     0.6
+		# Descriptive names for design variables
 		descriptors  "rc" "gamma_f"
 
+	# State variables that remain constant during the study
 	continuous_state 2
+		# Fixed values for state variables: hm0 = 2, gamma_beta = 1
 		initial_state   2         1
+		# Descriptive names for state variables
 		descriptors   "hm0"  "gamma_beta"  
 
+# INTERFACE SECTION - Defines how Dakota communicates with external simulation
 interface
+	# Unique identifier for this interface
 	id_interface "interface1"
+	# Command to execute the external analysis (Python script)
 	analysis_drivers "python eurotop-driver.py"
+		# Use fork interface (spawn separate processes)
 		fork
+			# File where Dakota writes parameter values for the simulation
 			parameters_file "params.in"
+			# File where simulation writes results for Dakota to read
 			results_file "results.out"
+			# Configure working directory for each simulation run
 			work_directory
+				# Create uniquely named directories for each evaluation
 				named "workdir/run"
+				# Copy these files to each working directory before running
 				copy_files 'eurotop-driver.py' 'eurotop-template.py'
+				# Add unique tags to directory names to avoid conflicts
 				directory_tag
+				# Keep directories after completion (for debugging/analysis)
 				directory_save
+	# Run simulations asynchronously (parallel execution)
 	asynchronous
+		# Maximum number of concurrent evaluations
 		evaluation_concurrency 8
 
+# RESPONSES SECTION - Defines what outputs Dakota expects from simulations
 responses
+	# Unique identifier for this responses specification
 	id_responses "responses1"
+	# Number of response functions the simulation will return
 	response_functions 1
+		# All responses are scalar values (single numbers)
 		scalar_responses 1
+		# Descriptive name for the response function
 		descriptors "overtop"
+	# Don't compute gradients (not needed for parameter study)
 	no_gradients
+	# Don't compute Hessians (not needed for parameter study)
 	no_hessians
