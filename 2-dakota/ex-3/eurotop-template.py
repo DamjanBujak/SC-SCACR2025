@@ -10,7 +10,7 @@ def overtopping_q(Hm0, Rc, gamma_f=0.5, gamma_beta=1.0, g=9.81):
 
 # --- Example ---
 Hm0 = {hm0}                  # sig. wave height [m]
-Rc = {rc}                    # freeboard [m]
+Rc = {rc}                    # crest height [m]
 gamma_f = {gamma_f}          # roughness factor
 gamma_beta = {gamma_beta}    # obliquity factor
 g = 9.81                     # [m s^-2]
