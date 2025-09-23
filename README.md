@@ -1,9 +1,9 @@
 # SC-SCACR2025
 
-Files for SCACR2025 short course 
+Materials for the SCACR 2025 Short Course on uncertainty quantification (UQ), reliability, and optimization for coastal hydrodynamics and overtopping. The repository contains self-contained examples for:
 
-1-swash: files for swash
+- standalone SWASH simulations,
 
-2-dakota: files for dakota
+- standalone Dakota studies,
 
-3-swash-dakota: files for working swash and dakota together
+- a coupled SWASH–Dakota workflow for design-oriented analyses.
